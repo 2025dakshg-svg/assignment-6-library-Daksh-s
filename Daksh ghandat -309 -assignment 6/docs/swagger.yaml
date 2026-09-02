@@ -1,0 +1,849 @@
+# Library Management API - OpenAPI 3.0 Specification
+# Single source of truth for the API contract. Served at /api-docs via
+# swagger-ui-express and parsed by swagger-jsdoc in src/config/swagger.js.
+
+openapi: 3.0.0
+info:
+  title: Library Management API
+  version: 1.0.0
+  description: |
+    A production-quality REST API for a Library Management System built with
+    Node.js, Express.js and Firebase Firestore.
+
+    **Roles:**
+    | Role       | Capabilities                                                              |
+    |------------|---------------------------------------------------------------------------|
+    | student    | view/search books, borrow & return books, own transaction history, own profile |
+    | librarian  | full CRUD on books, manage users, view all transactions, view/edit own profile |
+
+    **Authentication:** all protected routes require `Authorization: Bearer <token>`.
+    Obtain a token via `POST /api/auth/login`.
+  termsOfService: http://example.com/terms
+  contact:
+    name: Daksh Ghandat - 309
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:5000
+    description: Local development server
+
+tags:
+  - name: Auth
+    description: Registration, login and own-profile endpoints
+  - name: Books
+    description: Catalogue browsing & librarian book management
+  - name: Transactions
+    description: Borrow/return actions and transaction history
+  - name: Users
+    description: Librarian-only user administration
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      required: [success, message, statusCode]
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: Validation failed
+        statusCode:
+          type: number
+          example: 400
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              location: { type: string }
+              message: { type: string }
+
+    User:
+      type: object
+      properties:
+        userId: { type: string, example: "uBT2fUft0hA7mU2Ohlax" }
+        name: { type: string, example: "Alice Johnson" }
+        email: { type: string, format: email, example: "alice@example.com" }
+        role: { type: string, enum: [student, librarian], example: student }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      description: Never includes the password field.
+
+    Book:
+      type: object
+      properties:
+        bookId: { type: string, example: "kHx1JpQ2c4VtA9sD0fZg" }
+        title: { type: string, example: "Clean Code" }
+        author: { type: string, example: "Robert C. Martin" }
+        isbn: { type: string, example: "9780132350884" }
+        category: { type: string, example: "Programming" }
+        status: { type: string, enum: [available, borrowed], example: available }
+        quantity: { type: number, example: 3 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Transaction:
+      type: object
+      properties:
+        transactionId: { type: string, example: "vT4mN9wX1rB7yU2eP8aS" }
+        userId: { type: string, example: "uBT2fUft0hA7mU2Ohlax" }
+        bookId: { type: string, example: "kHx1JpQ2c4VtA9sD0fZg" }
+        type: { type: string, enum: [borrow, return], example: borrow }
+        borrowDate: { type: string, format: date-time }
+        returnDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: null while the book is still borrowed
+        dueDate:
+          type: string
+          format: date-time
+          description: borrowDate + 14 days
+        status: { type: string, enum: [active, returned, overdue], example: active }
+        createdAt: { type: string, format: date-time }
+
+    RegisterBody:
+      type: object
+      required: [name, email, password]
+      properties:
+        name: { type: string, example: "Alice Johnson" }
+        email: { type: string, format: email, example: "alice@example.com" }
+        password: { type: string, format: password, minLength: 6, example: "secret123" }
+        role: { type: string, enum: [student, librarian], example: student }
+
+    LoginBody:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: "alice@example.com" }
+        password: { type: string, format: password, example: "secret123" }
+
+    UpdateProfileBody:
+      type: object
+      properties:
+        name: { type: string, example: "Alice J." }
+        email: { type: string, format: email, example: "alice.j@example.com" }
+        password: { type: string, format: password, minLength: 6, example: "newsecret123" }
+
+    CreateBookBody:
+      type: object
+      required: [title, author, isbn, category]
+      properties:
+        title: { type: string, example: "Clean Code" }
+        author: { type: string, example: "Robert C. Martin" }
+        isbn: { type: string, example: "9780132350884" }
+        category: { type: string, example: "Programming" }
+        quantity: { type: number, minimum: 0, default: 1, example: 5 }
+        status: { type: string, enum: [available, borrowed], default: available }
+
+    UpdateBookBody:
+      type: object
+      properties:
+        title: { type: string, example: "Clean Code: A Handbook" }
+        author: { type: string }
+        isbn: { type: string }
+        category: { type: string }
+        quantity: { type: number, minimum: 0, example: 4 }
+        status: { type: string, enum: [available, borrowed] }
+
+    UpdateRoleBody:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string, enum: [student, librarian], example: librarian }
+
+paths:
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user (student or librarian)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterBody' }
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "User registered successfully" }
+                  data:
+                    type: object
+                    properties:
+                      user: { $ref: '#/components/schemas/User' }
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: Email already registered
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login and receive a JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginBody' }
+      responses:
+        '200':
+          description: Login successful, returns JWT token + user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  message: { type: string, example: "Login successful" }
+                  data:
+                    type: object
+                    properties:
+                      token: { type: string }
+                      tokenType: { type: string, example: Bearer }
+                      expiresIn: { type: string, example: "24h" }
+                      user: { $ref: '#/components/schemas/User' }
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/auth/profile:
+    get:
+      tags: [Auth]
+      summary: Get the logged-in user's profile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Profile fetched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      user: { $ref: '#/components/schemas/User' }
+        '401':
+          description: Missing / invalid / expired token
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    put:
+      tags: [Auth]
+      summary: Update the logged-in user's own profile (name, email, password)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProfileBody' }
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      user: { $ref: '#/components/schemas/User' }
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/books:
+    get:
+      tags: [Books]
+      summary: List all books with optional filters (all authenticated users)
+      parameters:
+        - in: query
+          name: category
+          required: false
+          schema: { type: string }
+          description: Exact category match, e.g. Programming
+        - in: query
+          name: status
+          required: false
+          schema: { type: string, enum: [available, borrowed] }
+          description: Filter by availability
+        - in: query
+          name: author
+          required: false
+          schema: { type: string }
+          description: Exact author match
+      responses:
+        '200':
+          description: List of books
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      books:
+                        type: array
+                        items: { $ref: '#/components/schemas/Book' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    post:
+      tags: [Books]
+      summary: Add a new book (Librarian only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateBookBody' }
+      responses:
+        '201':
+          description: Book created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      book: { $ref: '#/components/schemas/Book' }
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403':
+          description: Forbidden - requires librarian role
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: ISBN already in catalogue
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/books/search:
+    get:
+      tags: [Books]
+      summary: Search books by title/author (case-insensitive, partial match)
+      parameters:
+        - in: query
+          name: q
+          required: false
+          schema: { type: string }
+          description: Searches title + author
+        - in: query
+          name: title
+          required: false
+          schema: { type: string }
+        - in: query
+          name: author
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: Matching books
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      books:
+                        type: array
+                        items: { $ref: '#/components/schemas/Book' }
+        '400':
+          description: Invalid query params
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/books/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Firestore document id of the book
+    get:
+      tags: [Books]
+      summary: Fetch a single book (all authenticated users)
+      responses:
+        '200':
+          description: Book fetched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      book: { $ref: '#/components/schemas/Book' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Book not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    put:
+      tags: [Books]
+      summary: Update a book (Librarian only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateBookBody' }
+      responses:
+        '200':
+          description: Book updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      book: { $ref: '#/components/schemas/Book' }
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403':
+          description: Forbidden - requires librarian role
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Book not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      tags: [Books]
+      summary: Delete a book (Librarian only)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Book deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      bookId: { type: string }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403':
+          description: Forbidden - requires librarian role
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Book not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/books/{id}/borrow:
+    post:
+      tags: [Transactions]
+      summary: Borrow a book (Student only). Creates an active transaction, decrements quantity, sets due date +14 days.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+          description: Firestore document id of the book
+      responses:
+        '201':
+          description: Book borrowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      transaction: { $ref: '#/components/schemas/Transaction' }
+        '400':
+          description: No copies available
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403':
+          description: Forbidden - requires student role
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Book not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: Already have an active borrow for this book
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/books/{id}/return:
+    post:
+      tags: [Transactions]
+      summary: Return a book (Student only). Closes the active transaction and increments quantity.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Book returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      transaction:
+                        type: object
+                        properties:
+                          transactionId: { type: string }
+                          bookId: { type: string }
+                          userId: { type: string }
+                          returnDate: { type: string, format: date-time }
+                          status: { type: string, example: returned }
+                          quantityNow: { type: number }
+        '400':
+          description: No active borrow found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403':
+          description: Forbidden - requires student role
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Book not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/transactions:
+    get:
+      tags: [Transactions]
+      summary: View all transactions (Librarian only)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: All transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      transactions:
+                        type: array
+                        items: { $ref: '#/components/schemas/Transaction' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403':
+          description: Forbidden - requires librarian role
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/transactions/my:
+    get:
+      tags: [Transactions]
+      summary: View the logged-in user's transaction history
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Own transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      transactions:
+                        type: array
+                        items: { $ref: '#/components/schemas/Transaction' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/users:
+    get:
+      tags: [Users]
+      summary: List all users (Librarian only)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of users (password never included)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      users:
+                        type: array
+                        items: { $ref: '#/components/schemas/User' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403':
+          description: Forbidden - requires librarian role
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/users/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Firestore document id of the user
+    get:
+      tags: [Users]
+      summary: Fetch a single user (Librarian only)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User fetched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      user: { $ref: '#/components/schemas/User' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403':
+          description: Forbidden - requires librarian role
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      tags: [Users]
+      summary: Delete a user (Librarian only)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      userId: { type: string }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403':
+          description: Forbidden - requires librarian role
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/users/{id}/role:
+    put:
+      tags: [Users]
+      summary: Update a user's role (Librarian only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateRoleBody' }
+      responses:
+        '200':
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      user: { $ref: '#/components/schemas/User' }
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403':
+          description: Forbidden - requires librarian role
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
