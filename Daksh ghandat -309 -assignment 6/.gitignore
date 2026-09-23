@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Environment (never commit real secrets)
+.env
+
+# Firebase service account keys (NEVER commit these)
+*serviceAccount*.json
+*firebase-adminsdk*.json
+service-account*.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+
+# Coverage / misc
+coverage/
+.nyc_output/
+tmp/

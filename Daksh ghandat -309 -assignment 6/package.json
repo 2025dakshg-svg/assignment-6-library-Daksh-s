@@ -1,0 +1,39 @@
+{
+  "name": "library-management-api",
+  "version": "1.0.0",
+  "description": "Production-quality REST API for a Library Management System built with Node.js, Express.js and Firebase Firestore.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "library",
+    "management",
+    "api",
+    "express",
+    "firebase",
+    "firestore"
+  ],
+  "author": "Daksh Ghandat - 309",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "express-rate-limit": "^6.7.0",
+    "express-validator": "^6.15.0",
+    "firebase-admin": "^11.8.0",
+    "helmet": "^7.0.0",
+    "jsonwebtoken": "^9.0.0",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^4.6.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  }
+}
